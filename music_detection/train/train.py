@@ -41,14 +41,14 @@ def copypaste_collate_fn(batch):
 
 
 def get_dataset(name, image_set, transform, data_path):
-    paths = {"coco": (data_path, get_coco, 91),
-             "coco_kp": (data_path, get_coco_kp, 2),
-             "coco_music_kp": (data_path, get_coco_music, 21),
+    paths = {"coco": (data_path, get_coco, 91, None),
+             "coco_kp": (data_path, get_coco_kp, 2, None),
+             "coco_music_kp": (data_path, get_coco_music, 21, 2),
              }
-    p, ds_fn, num_classes = paths[name]
+    p, ds_fn, num_classes, num_keypoints = paths[name]
 
     ds = ds_fn(p, image_set=image_set, transforms=transform)
-    return ds, num_classes
+    return ds, num_classes, num_keypoints
 
 
 def get_transform(train, args):
@@ -180,8 +180,8 @@ def main(args):
     # Data loading code
     print("Loading data")
 
-    dataset, num_classes = get_dataset(args.dataset, "train", get_transform(True, args), args.data_path)
-    dataset_test, _ = get_dataset(args.dataset, "val", get_transform(False, args), args.data_path)
+    dataset, num_classes, num_keypoints = get_dataset(args.dataset, "train", get_transform(True, args), args.data_path)
+    dataset_test, _, _ = get_dataset(args.dataset, "val", get_transform(False, args), args.data_path)
 
     print("Creating data loaders")
     if args.distributed:
@@ -220,7 +220,11 @@ def main(args):
         if args.rpn_score_thresh is not None:
             kwargs["rpn_score_thresh"] = args.rpn_score_thresh
     model = torchvision.models.get_model(
-        args.model, weights=args.weights, weights_backbone=args.weights_backbone, num_classes=num_classes, **kwargs
+        args.model, weights=args.weights,
+        weights_backbone=args.weights_backbone,
+        num_classes=num_classes,
+        num_keypoints=num_keypoints,
+        **kwargs
     )
     model.to(device)
     if args.distributed and args.sync_bn:
