@@ -33,6 +33,7 @@ from engine import evaluate, train_one_epoch
 from group_by_aspect_ratio import create_aspect_ratio_groups, GroupedBatchSampler
 from torchvision.transforms import InterpolationMode
 from transforms import SimpleCopyPaste
+import numpy as np
 
 
 def copypaste_collate_fn(batch):
@@ -182,6 +183,10 @@ def main(args):
 
     dataset, num_classes, num_keypoints = get_dataset(args.dataset, "train", get_transform(True, args), args.data_path)
     dataset_test, _, _ = get_dataset(args.dataset, "val", get_transform(False, args), args.data_path)
+    if args.dataset == 'coco_music_kp':
+        kpt_oks_sigmas = np.array([1.0, 1.0]) / 10.0
+    else:
+        kpt_oks_sigmas = None
 
     print("Creating data loaders")
     if args.distributed:
@@ -279,8 +284,10 @@ def main(args):
 
     if args.test_only:
         torch.backends.cudnn.deterministic = True
-        evaluate(model, data_loader, device=device)
-        evaluate(model, data_loader_test, device=device)
+        evaluate(model, data_loader, device=device,
+                 kpt_oks_sigmas=kpt_oks_sigmas)
+        evaluate(model, data_loader_test, device=device,
+                 kpt_oks_sigmas=kpt_oks_sigmas)
         return
 
     print("Start training")
@@ -304,7 +311,10 @@ def main(args):
             utils.save_on_master(checkpoint, os.path.join(args.output_dir, "checkpoint.pth"))
 
         # evaluate after every epoch
-        evaluate(model, data_loader_test, device=device)
+        evaluate(model, data_loader, device=device,
+                 kpt_oks_sigmas=kpt_oks_sigmas)
+        evaluate(model, data_loader_test, device=device,
+                 kpt_oks_sigmas=kpt_oks_sigmas)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
