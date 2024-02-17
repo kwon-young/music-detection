@@ -164,6 +164,9 @@ def get_args_parser(add_help=True):
         help="Use CopyPaste data augmentation. Works only with data-augmentation='lsj'.",
     )
 
+    parser.add_argument("--no-evaluate", action='store_true', default=False,
+                        help="desactivate evaluation during training")
+
     return parser
 
 
@@ -320,10 +323,11 @@ def main(args):
             utils.save_on_master(checkpoint, os.path.join(args.output_dir, "checkpoint.pth"))
 
         # evaluate after every epoch
-        evaluate(model, data_loader, device=device,
-                 kpt_oks_sigmas=kpt_oks_sigmas)
-        evaluate(model, data_loader_test, device=device,
-                 kpt_oks_sigmas=kpt_oks_sigmas)
+        if not args.no_evaluate:
+            evaluate(model, data_loader, device=device,
+                     kpt_oks_sigmas=kpt_oks_sigmas)
+            evaluate(model, data_loader_test, device=device,
+                     kpt_oks_sigmas=kpt_oks_sigmas)
 
     writer.close()
     total_time = time.time() - start_time
