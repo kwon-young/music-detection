@@ -33,6 +33,7 @@ from coco_utils import get_coco, get_coco_kp, get_coco_music
 from engine import evaluate, train_one_epoch
 from group_by_aspect_ratio import create_aspect_ratio_groups, GroupedBatchSampler
 from torchvision.transforms import InterpolationMode
+from torchvision.utils import draw_bounding_boxes
 from transforms import SimpleCopyPaste
 import numpy as np
 
@@ -186,6 +187,7 @@ def main(args):
     print("Loading data")
 
     dataset, num_classes, num_keypoints = get_dataset(args.dataset, "train", get_transform(True, args), args.data_path)
+    dataset_vis, _, _ = get_dataset(args.dataset, "train", get_transform(False, args), args.data_path)
     dataset_test, _, _ = get_dataset(args.dataset, "val", get_transform(False, args), args.data_path)
     if args.dataset == 'coco_music_kp':
         kpt_oks_sigmas = np.array([1.0, 1.0]) / 10.0
@@ -198,13 +200,14 @@ def main(args):
         test_sampler = torch.utils.data.distributed.DistributedSampler(dataset_test, shuffle=False)
     else:
         train_sampler = torch.utils.data.RandomSampler(dataset)
+        vis_sampler = torch.utils.data.SequentialSampler(dataset_vis)
         test_sampler = torch.utils.data.SequentialSampler(dataset_test)
 
     if args.aspect_ratio_group_factor >= 0:
         group_ids = create_aspect_ratio_groups(dataset, k=args.aspect_ratio_group_factor)
         train_batch_sampler = GroupedBatchSampler(train_sampler, group_ids, args.batch_size)
     else:
-        train_batch_sampler = torch.utils.data.BatchSampler(train_sampler, args.batch_size, drop_last=True)
+        train_batch_sampler = torch.utils.data.BatchSampler(train_sampler, args.batch_size, drop_last=False)
 
     train_collate_fn = utils.collate_fn
     if args.use_copypaste:
@@ -219,6 +222,9 @@ def main(args):
 
     data_loader_test = torch.utils.data.DataLoader(
         dataset_test, batch_size=1, sampler=test_sampler, num_workers=args.workers, collate_fn=utils.collate_fn
+    )
+    data_loader_vis = torch.utils.data.DataLoader(
+        dataset_vis, batch_size=1, sampler=vis_sampler, num_workers=args.workers, collate_fn=utils.collate_fn
     )
 
     print("Creating model")
@@ -294,7 +300,7 @@ def main(args):
                  kpt_oks_sigmas=kpt_oks_sigmas)
         return
 
-    writer = SummaryWriter(log_dir=args.output_dir)
+    writer = SummaryWriter(log_dir=args.output_dir, purge_step=args.start_epoch)
     print("Start training")
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
@@ -328,7 +334,18 @@ def main(args):
                      kpt_oks_sigmas=kpt_oks_sigmas)
             evaluate(model, data_loader_test, device=device,
                      kpt_oks_sigmas=kpt_oks_sigmas)
-
+        model.eval()
+        for images, targets in data_loader_vis:
+            images = list(image.to(device) for image in images)
+            outputs = model(images)
+            for img, target, output in zip(images, targets, outputs):
+                vis_img = draw_bounding_boxes(
+                    (img.to('cpu') * 255).to(torch.uint8),
+                    output['boxes'].to('cpu'),
+                    [str(int(label)) for label in output['labels']],
+                    colors='red')
+                writer.add_image(f"train_{int(target['image_id'])}", vis_img,
+                                 global_step=epoch)
     writer.close()
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
