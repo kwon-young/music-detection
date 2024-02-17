@@ -5,3 +5,4 @@ dependencies:
   - cython
   - pycocotools
   - matplotlib
+  - tensorboard

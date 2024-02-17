@@ -24,6 +24,7 @@ import time
 import presets
 import torch
 import torch.utils.data
+from torch.utils.tensorboard import SummaryWriter
 import torchvision
 import torchvision.models.detection
 import torchvision.models.detection.mask_rcnn
@@ -290,12 +291,20 @@ def main(args):
                  kpt_oks_sigmas=kpt_oks_sigmas)
         return
 
+    writer = SummaryWriter(log_dir=args.output_dir)
     print("Start training")
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
-        train_one_epoch(model, optimizer, data_loader, device, epoch, args.print_freq, scaler)
+        train_metrics = train_one_epoch(model, optimizer, data_loader, device, epoch, args.print_freq, scaler)
+        meters = {name: value.value
+                  for name, value in train_metrics.meters.items()}
+        losses = {name: value for name, value in meters.items()
+                  if 'loss' in name}
+        writer.add_scalars("train", losses, global_step=epoch)
+        writer.add_scalar("lr", meters['lr'], global_step=epoch)
+
         lr_scheduler.step()
         if args.output_dir:
             checkpoint = {
@@ -316,6 +325,7 @@ def main(args):
         evaluate(model, data_loader_test, device=device,
                  kpt_oks_sigmas=kpt_oks_sigmas)
 
+    writer.close()
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print(f"Training time {total_time_str}")
