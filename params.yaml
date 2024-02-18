@@ -1,0 +1,8 @@
+coco_music_keypoints_url: "https://www.kaggle.com/api/v1/datasets/download/kwonyoungchoi/coco-music-keypoints"
+
+train:
+  model: fasterrcnn_resnet50_fpn
+  batch-size: 4
+  epochs: 10
+  lr: 0.000625
+  weights-backbone: ResNet50_Weights.IMAGENET1K_V1

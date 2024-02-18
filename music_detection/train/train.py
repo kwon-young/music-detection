@@ -36,6 +36,7 @@ from torchvision.transforms import InterpolationMode
 from torchvision.utils import draw_bounding_boxes
 from transforms import SimpleCopyPaste
 import numpy as np
+from dvclive import Live
 
 
 def copypaste_collate_fn(batch):
@@ -73,7 +74,8 @@ def get_args_parser(add_help=True):
     parser.add_argument("--data-path", default="/datasets01/COCO/022719/", type=str, help="dataset path")
     parser.add_argument("--dataset", default="coco", type=str, help="dataset name")
     parser.add_argument("--model", default="maskrcnn_resnet50_fpn", type=str, help="model name")
-    parser.add_argument("--device", default="cuda", type=str, help="device (Use cuda or cpu Default: cuda)")
+    parser.add_argument("--device", default="cuda", type=str, choices=['cuda', 'cpu'],
+                        help="device (Use cuda or cpu Default: cuda)")
     parser.add_argument(
         "-b", "--batch-size", default=2, type=int, help="images per gpu, the total batch size is $NGPU x batch_size"
     )
@@ -301,6 +303,7 @@ def main(args):
         return
 
     writer = SummaryWriter(log_dir=args.output_dir, purge_step=args.start_epoch)
+    live = Live(dir=args.output_dir, resume=bool(args.resume), report='md')
     print("Start training")
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
@@ -313,6 +316,9 @@ def main(args):
                   if 'loss' in name}
         writer.add_scalars("train", losses, global_step=epoch)
         writer.add_scalar("lr", meters['lr'], global_step=epoch)
+        for name, value in losses.items():
+            live.log_metric(f"train/{name}", value)
+        live.log_metric("lr", meters['lr'])
 
         lr_scheduler.step()
         if args.output_dir:
@@ -346,7 +352,9 @@ def main(args):
                     colors='red')
                 writer.add_image(f"train_{int(target['image_id'])}", vis_img,
                                  global_step=epoch)
+        live.next_step()
     writer.close()
+    live.end()
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print(f"Training time {total_time_str}")

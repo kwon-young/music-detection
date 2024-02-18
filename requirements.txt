@@ -4,3 +4,6 @@ cython
 pycocotools
 matplotlib
 tensorboard
+dvc
+kaggle
+dvclive

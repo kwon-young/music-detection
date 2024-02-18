@@ -6,3 +6,6 @@ dependencies:
   - pycocotools
   - matplotlib
   - tensorboard
+  - dvc
+  - kaggle
+  - dvclive

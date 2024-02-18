@@ -1,0 +1,32 @@
+stages:
+  download_coco_music_keypoints:
+    cmd: kaggle datasets download --force --unzip -d kwonyoungchoi/coco-music-keypoints
+      -p data/
+    params:
+    - coco_music_keypoints_url
+    outs:
+    - data/coco_music_keypoints
+  train:
+    cmd: >-
+      python music_detection/train/train.py  --data-path data/coco_music_keypoints
+      --dataset coco_music_kp
+      --model ${train.model}
+      --batch-size ${train.batch-size}
+      --epochs ${train.epochs}
+      --output-dir data/train_output
+      --data-augmentation nothing
+      --lr ${train.lr}
+      --weights-backbone ${train.weights-backbone}
+      --device $DEVICE
+      --no-evaluate
+    deps:
+    - data/coco_music_keypoints
+    params:
+    - train
+    outs:
+    - data/train_output
+metrics:
+- data/train_output/metrics.json
+plots:
+- data/train_output/plots/metrics:
+    x: step
