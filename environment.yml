@@ -9,3 +9,4 @@ dependencies:
   - dvc
   - kaggle
   - dvclive
+  - dvc-s3

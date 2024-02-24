@@ -1,0 +1,40 @@
+schema: '2.0'
+stages:
+  download_coco_music_keypoints:
+    cmd: kaggle datasets download --force --unzip -d kwonyoungchoi/coco-music-keypoints
+      -p data/
+    params:
+      params.yaml:
+        coco_music_keypoints_url: 
+          https://www.kaggle.com/api/v1/datasets/download/kwonyoungchoi/coco-music-keypoints
+    outs:
+    - path: data/coco_music_keypoints
+      hash: md5
+      md5: 4270bd1afbc12bf68203b80e7f2b549c.dir
+      size: 1300046
+      nfiles: 21
+  train:
+    cmd: python music_detection/train/train.py  --data-path data/coco_music_keypoints
+      --dataset coco_music_kp --model fasterrcnn_resnet50_fpn --batch-size 4 --epochs
+      10 --output-dir data/train_output --data-augmentation nothing --lr 0.000625
+      --weights-backbone ResNet50_Weights.IMAGENET1K_V1 --device $DEVICE --no-evaluate
+    deps:
+    - path: data/coco_music_keypoints
+      hash: md5
+      md5: 4270bd1afbc12bf68203b80e7f2b549c.dir
+      size: 1300046
+      nfiles: 21
+    params:
+      params.yaml:
+        train:
+          model: fasterrcnn_resnet50_fpn
+          batch-size: 4
+          epochs: 10
+          lr: 0.000625
+          weights-backbone: ResNet50_Weights.IMAGENET1K_V1
+    outs:
+    - path: data/train_output
+      hash: md5
+      md5: b1195c42a15b1b7b8d034447d54160a7.dir
+      size: 336699260
+      nfiles: 21

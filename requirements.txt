@@ -7,3 +7,4 @@ tensorboard
 dvc
 kaggle
 dvclive
+dvc-s3

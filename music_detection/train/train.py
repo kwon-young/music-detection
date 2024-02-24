@@ -20,6 +20,7 @@ the number of epochs should be adapted so that we have the same number of iterat
 import datetime
 import os
 import time
+import random
 
 import presets
 import torch
@@ -169,7 +170,8 @@ def get_args_parser(add_help=True):
 
     parser.add_argument("--no-evaluate", action='store_true', default=False,
                         help="desactivate evaluation during training")
-
+    parser.add_argument("--seed", default=0, type=int,
+                        help="global random seed")
     return parser
 
 
@@ -362,4 +364,7 @@ def main(args):
 
 if __name__ == "__main__":
     args = get_args_parser().parse_args()
+    torch.manual_seed(args.seed)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
     main(args)

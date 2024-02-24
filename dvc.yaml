@@ -19,6 +19,7 @@ stages:
       --weights-backbone ${train.weights-backbone}
       --device $DEVICE
       --no-evaluate
+      --use-deterministic-algorithms
     deps:
     - data/coco_music_keypoints
     params:
