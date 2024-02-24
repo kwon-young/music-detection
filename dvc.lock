@@ -18,6 +18,7 @@ stages:
       --dataset coco_music_kp --model fasterrcnn_resnet50_fpn --batch-size 4 --epochs
       10 --output-dir data/train_output --data-augmentation nothing --lr 0.000625
       --weights-backbone ResNet50_Weights.IMAGENET1K_V1 --device $DEVICE --no-evaluate
+      --use-deterministic-algorithms
     deps:
     - path: data/coco_music_keypoints
       hash: md5
@@ -35,6 +36,6 @@ stages:
     outs:
     - path: data/train_output
       hash: md5
-      md5: b1195c42a15b1b7b8d034447d54160a7.dir
-      size: 336699260
+      md5: 1801703981c756f73101301f49e43299.dir
+      size: 336629662
       nfiles: 21
