@@ -1,5 +1,3 @@
-coco_music_keypoints_url: "https://www.kaggle.com/api/v1/datasets/download/kwonyoungchoi/coco-music-keypoints"
-
 train:
   model: fasterrcnn_resnet50_fpn
   batch-size: 4
