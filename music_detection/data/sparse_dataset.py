@@ -1,15 +1,16 @@
 import os
-from typing import Optional, Callable
+from typing import Callable
 import json
-from collections import defaultdict
+from pathlib import Path
 
 import torch
 import torch.utils.data as data
 from torchvision.transforms.v2 import ToDtype
-from torchvision.io import read_image, ImageReadMode
-from spconv import SparseConvTensor
+from torchvision.io import read_image, ImageReadMode, write_jpeg
+import spconv.pytorch as spconv
 
 from music_detection.train.coco_utils import convert_coco_poly_to_mask
+from music_detection.model.sparse_model import share_indices
 
 
 def invert(image: torch.Tensor):
@@ -20,40 +21,96 @@ def channel_last(image: torch.Tensor):
     return image.permute(1, 2, 0)
 
 
-def from_dense(x: torch.Tensor, device: str = 'cpu'):
-    """create sparse tensor fron channel last dense tensor by to_sparse
-    x must be NHWC tensor, channel last
+def from_torch_sparse(x_sp: torch.Tensor):
+    """create SparseConvTensor tensor from channel last sparse tensor
+    x_sp must be NHWC tensor, channel last
     """
-    x_sp = x.to_sparse(x.ndim - 1).to(device)
     spatial_shape = x_sp.shape[1:-1]
     batch_size = x_sp.shape[0]
     indices_th = x_sp.indices().permute(1, 0).contiguous().int()
     features_th = x_sp.values()
-    return SparseConvTensor(features_th, indices_th, spatial_shape, batch_size)
+    return spconv.SparseConvTensor(features_th, indices_th, spatial_shape,
+                                   batch_size)
+
+
+def sparse_collate(batch: list[tuple[torch.Tensor, torch.Tensor]],
+                   device: torch.device):
+    result = []
+    for tensors in zip(*batch):
+        tensor = torch.stack(tensors, dim=0)
+        tensor = tensor.coalesce()
+        tensor = tensor.to(device)
+        tensor = from_torch_sparse(tensor)
+        result.append(tensor)
+    return tuple(result)
+
+
+def write_mask(mask, last=True):
+    if last:
+        mask = mask.sum(axis=2).expand(1, -1, -1)
+    mask = (mask * 255).to(torch.uint8)
+    mask = torch.cat([mask, mask, mask], axis=0)
+    write_jpeg(mask, "/tmp/test.jpeg")
+
+
+@torch.no_grad()
+def write_xy(x: spconv.SparseConvTensor, y: spconv.SparseConvTensor
+             ) -> list[torch.Tensor]:
+    g_feat = x.features * y.features
+    g_feat = g_feat.sum(dim=1, keepdim=True)
+    g = spconv.SparseConvTensor(g_feat, x.indices, x.spatial_shape,
+                                x.batch_size)
+    g = g.dense().to('cpu')
+    r_feat = x.features * (1 - y.features)
+    r_feat = r_feat.sum(dim=1, keepdim=True)
+    r = spconv.SparseConvTensor(r_feat, x.indices, x.spatial_shape,
+                                x.batch_size)
+    r = r.dense().to('cpu')
+    b = torch.zeros_like(r)
+    imgs = (torch.cat([r, g, b], dim=1) * 255).to(torch.uint8)
+    res = []
+    for img in imgs:
+        nonzero = torch.nonzero(img)
+        x1 = nonzero[:, 1].min()
+        y1 = nonzero[:, 2].min()
+        x2 = nonzero[:, 1].max()
+        y2 = nonzero[:, 2].max()
+        res.append(img[:, x1:x2, y1:y2])
+    return res
 
 
 class SparseCoco(data.Dataset):
 
-    def __init__(self, root: str, annFile: str,
-                 transforms: Optional[Callable] = None):
+    def __init__(self, root: Path, annFile: Path,
+                 transforms: Callable | None = None,
+                 categories: dict | None = None):
+        super().__init__()
         self.root = root
+        self.transforms = transforms
         with open(annFile, 'r') as f:
             self.coco = json.load(f)
-        image_index = {image['image_id']: i
+        image_index = {image['id']: i
                        for i, image in enumerate(self.coco['images'])}
+        self.cat = {
+            i: cat['name'] for i, cat in enumerate(self.coco['categories'])}
         cat_index = {
             cat['id']: i for i, cat in enumerate(self.coco['categories'])}
-        self.index: dict[int, dict[int, list[int]]] = defaultdict(
-            lambda: defaultdict(list))
+        self.num_classes = len(self.coco['categories'])
+        self.index: list[list[list[int]]] = [
+            [[] for _ in range(self.num_classes)]
+            for _ in range(len(image_index))]
         for i, annot in enumerate(self.coco['annotations']):
             image_i = image_index[annot['image_id']]
             cat_i = cat_index[annot['category_id']]
             self.index[image_i][cat_i].append(i)
+        self.cache: dict = {}
 
     def __len__(self):
         return len(self.index)
 
-    def __getitem(self, index):
+    def __getitem__(self, index):
+        if index in self.cache:
+            return self.cache[index]
         info = self.coco['images'][index]
         width, height = info['width'], info['height']
         path = info['file_name']
@@ -61,25 +118,23 @@ class SparseCoco(data.Dataset):
         image = channel_last(
             ToDtype(torch.float32, scale=True)(
                 invert(image)))
-        image_sparse = image.to_sparse(image.ndim - 1)
+        image_sparse = image.to_sparse(image.ndim - 1) / 255.
 
         masks = []
-        for cat_i, annots in self.index[index].items():
-            cat_mask = None
+        for annots in self.index[index]:
+            cat_mask = torch.zeros(1, height, width, dtype=torch.uint8)
             for i in annots:
                 annot = self.coco['annotations'][i]
                 mask = convert_coco_poly_to_mask([annot['segmentation']],
                                                  height, width)
-                if cat_mask is None:
-                    cat_mask = mask
-                else:
-                    cat_mask |= mask
+                cat_mask |= mask
             cat_mask = channel_last(cat_mask)
             masks.append(cat_mask.to_sparse(cat_mask.ndim - 1))
-        target_sparse = torch.cat(masks, -1)
+        target_sparse = torch.cat(masks, -1).to(torch.float32)
 
         if self.transforms is not None:
             image_sparse, target_sparse = self.transforms(
                 image_sparse, target_sparse)
 
+        self.cache[index] = (image_sparse, target_sparse)
         return image_sparse, target_sparse

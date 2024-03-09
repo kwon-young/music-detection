@@ -1,6 +1,14 @@
 train:
   model: fasterrcnn_resnet50_fpn
-  batch-size: 4
+  batch_size: 4
   epochs: 10
   lr: 0.000625
-  weights-backbone: ResNet50_Weights.IMAGENET1K_V1
+  weights_backbone: ResNet50_Weights.IMAGENET1K_V1
+
+train_sparse:
+  output_dir: data/train_sparse
+  seed: 0
+  dataset: data/coco_music_keypoints
+  batch_size: 3
+  lr: 0.01
+  epochs: 10

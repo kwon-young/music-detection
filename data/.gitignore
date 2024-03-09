@@ -1,2 +1,4 @@
 /coco_music_keypoints
 /train_output
+/${train_sparse.output_dir}
+/train_sparse

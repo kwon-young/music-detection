@@ -10,3 +10,6 @@ dependencies:
   - kaggle
   - dvclive
   - dvc-s3
+  - pip:
+    - spconv
+    - torcheval

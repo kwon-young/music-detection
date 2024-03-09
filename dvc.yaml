@@ -1,26 +1,18 @@
 stages:
-  train:
-    cmd: >-
-      python music_detection/train/train.py  --data-path data/coco_music_keypoints
-      --dataset coco_music_kp
-      --model ${train.model}
-      --batch-size ${train.batch-size}
-      --epochs ${train.epochs}
-      --output-dir data/train_output
-      --data-augmentation nothing
-      --lr ${train.lr}
-      --weights-backbone ${train.weights-backbone}
-      --device $DEVICE
-      --no-evaluate
-      --use-deterministic-algorithms
+  train_sparse:
+    cmd: python music_detection/train/train_sparse.py
     deps:
     - data/coco_music_keypoints
+    - music_detection/train/train_sparse.py
+    - music_detection/data/sparse_dataset.py
+    - music_detection/model/sparse_model.py
+    - music_detection/params.py
     params:
-    - train
+    - train_sparse
     outs:
-    - data/train_output
+    - ${train_sparse.output_dir}
 metrics:
-- data/train_output/metrics.json
+- data/train_sparse/metrics.json
 plots:
-- data/train_output/plots/metrics:
+- data/train_sparse/plots/metrics:
     x: step
