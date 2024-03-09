@@ -56,12 +56,12 @@ stages:
           output_dir: data/train_sparse
           seed: 0
           dataset: data/coco_music_keypoints
-          batch_size: 3
+          batch_size: 9
           lr: 0.01
           epochs: 10
     outs:
     - path: data/train_sparse
       hash: md5
-      md5: 7c23ed420e28f6b2be025b13b5cbe8a0.dir
-      size: 3143985
+      md5: 814c411e6b8c1a8f9f02e7d6af8447d9.dir
+      size: 2996215
       nfiles: 202

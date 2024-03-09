@@ -9,6 +9,6 @@ train_sparse:
   output_dir: data/train_sparse
   seed: 0
   dataset: data/coco_music_keypoints
-  batch_size: 3
+  batch_size: 9
   lr: 0.01
   epochs: 10

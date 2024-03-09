@@ -11,5 +11,4 @@ dependencies:
   - dvclive
   - dvc-s3
   - pip:
-    - spconv
     - torcheval

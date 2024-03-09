@@ -8,5 +8,4 @@ dvc
 kaggle
 dvclive
 dvc-s3
-spconv
 torcheval
