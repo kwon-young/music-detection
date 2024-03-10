@@ -48,8 +48,8 @@ stages:
       size: 636
     - path: music_detection/train/train_sparse.py
       hash: md5
-      md5: dad968a5cdc7255174f2275134a73d56
-      size: 6414
+      md5: 5dbc40748ccde8eb5732c30b78f74b63
+      size: 6393
     params:
       params.yaml:
         train_sparse:
@@ -58,10 +58,10 @@ stages:
           dataset: data/coco_music_keypoints
           batch_size: 9
           lr: 0.01
-          epochs: 10
+          epochs: 100
     outs:
     - path: data/train_sparse
       hash: md5
-      md5: f2cb22e1fc5d8033dda40258335f913b.dir
-      size: 2996217
+      md5: ec08096a3c367871975074ea8d183c17.dir
+      size: 29436453
       nfiles: 202
