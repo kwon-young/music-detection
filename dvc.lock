@@ -40,8 +40,8 @@ stages:
       size: 4952
     - path: music_detection/model/sparse_model.py
       hash: md5
-      md5: 9c846e96dee9d5a347633c6744bacee6
-      size: 1576
+      md5: fae629aa4c8c80f5f3c90ee39ef5deec
+      size: 1558
     - path: music_detection/params.py
       hash: md5
       md5: 8602be2715010fa3e7113030bd13f559
@@ -62,6 +62,6 @@ stages:
     outs:
     - path: data/train_sparse
       hash: md5
-      md5: 814c411e6b8c1a8f9f02e7d6af8447d9.dir
-      size: 2996215
+      md5: f2cb22e1fc5d8033dda40258335f913b.dir
+      size: 2996217
       nfiles: 202

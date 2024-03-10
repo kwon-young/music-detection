@@ -159,6 +159,5 @@ def main(args):
 
 
 if __name__ == "__main__":
-    import autodebug
     set_start_method('spawn')
     main(make_args())

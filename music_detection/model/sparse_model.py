@@ -25,7 +25,7 @@ class SparseFCN(nn.Module):
     def __init__(self, input_features: int, num_classes: int):
         super().__init__()
         self.num_classes = num_classes
-        algo = spconv.ConvAlgo.Native
+        algo = None
         self.net = spconv.SparseSequential(
             spconv.SparseConv2d(
                 input_features, 8, 3, stride=2, dilation=2, indice_key="cp1",
