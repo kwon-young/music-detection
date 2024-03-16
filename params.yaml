@@ -12,3 +12,6 @@ train_sparse:
   batch_size: 9
   lr: 0.01
   epochs: 10
+  weights: true
+  stride: 1
+  dilation: 1

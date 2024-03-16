@@ -34,22 +34,26 @@ stages:
       md5: d7cb01446f0a629bec25dd4dd885eca9.dir
       size: 2984542
       nfiles: 21
+    - path: data/coco_music_keypoints_weights.json
+      hash: md5
+      md5: baa46f317e7427216264f4a127c439b1
+      size: 750
     - path: music_detection/data/sparse_dataset.py
       hash: md5
-      md5: a06d3e4c13aa1ff14b5e273c2fd300f7
-      size: 4952
+      md5: 9fc6b7f767f37227b8dfde1217d2186d
+      size: 5571
     - path: music_detection/model/sparse_model.py
       hash: md5
-      md5: fae629aa4c8c80f5f3c90ee39ef5deec
-      size: 1558
+      md5: 912b95e9c76bd47e3834af77f75cd612
+      size: 1919
     - path: music_detection/params.py
       hash: md5
-      md5: 8602be2715010fa3e7113030bd13f559
-      size: 636
+      md5: 9a2e0fe3d63dd19b0118d51fcf0d90f1
+      size: 696
     - path: music_detection/train/train_sparse.py
       hash: md5
-      md5: dad968a5cdc7255174f2275134a73d56
-      size: 6414
+      md5: 2c0d2b77434500959f3c11922c6d9aa9
+      size: 8153
     params:
       params.yaml:
         train_sparse:
@@ -59,9 +63,40 @@ stages:
           batch_size: 9
           lr: 0.01
           epochs: 10
+          weights: true
+          stride: 1
+          dilation: 1
     outs:
     - path: data/train_sparse
       hash: md5
-      md5: f2cb22e1fc5d8033dda40258335f913b.dir
-      size: 2996217
-      nfiles: 202
+      md5: 7e39775d9666a53d2c1630a4bc491194.dir
+      size: 4408801
+      nfiles: 82
+  compute_weights:
+    cmd: python music_detection/utils/compute_weights.py
+    deps:
+    - path: data/coco_music_keypoints
+      hash: md5
+      md5: d7cb01446f0a629bec25dd4dd885eca9.dir
+      size: 2984542
+      nfiles: 21
+    - path: music_detection/data/sparse_dataset.py
+      hash: md5
+      md5: 6197734648e34c49900f4d3d9a3f69b2
+      size: 6109
+    - path: music_detection/params.py
+      hash: md5
+      md5: 9a2e0fe3d63dd19b0118d51fcf0d90f1
+      size: 696
+    - path: music_detection/utils/compute_weights.py
+      hash: md5
+      md5: 330edb9d480c3aadcd09d3293843182d
+      size: 1087
+    params:
+      params.yaml:
+        train_sparse.dataset: data/coco_music_keypoints
+    outs:
+    - path: data/coco_music_keypoints_weights.json
+      hash: md5
+      md5: baa46f317e7427216264f4a127c439b1
+      size: 750

@@ -33,6 +33,10 @@ def from_torch_sparse(x_sp: torch.Tensor):
                                    batch_size)
 
 
+def to_torch_sparse(x: spconv.SparseConvTensor):
+    return torch.sparse_coo_tensor(x.indices.T, x.features)
+
+
 def sparse_collate(batch: list[tuple[torch.Tensor, torch.Tensor]],
                    device: torch.device):
     result = []
@@ -53,30 +57,67 @@ def write_mask(mask, last=True):
     write_jpeg(mask, "/tmp/test.jpeg")
 
 
+def make_imgs(g, r, indices, spatial_shape, batch_size):
+    g = spconv.SparseConvTensor(g, indices, spatial_shape, batch_size)
+    g = g.dense().to('cpu')
+    r = spconv.SparseConvTensor(r, indices, spatial_shape, batch_size)
+    r = r.dense().to('cpu')
+    b = torch.zeros_like(r)
+    return (torch.cat([r, g, b], dim=1) * 255).to(torch.uint8)
+
+
 @torch.no_grad()
 def write_xy(x: spconv.SparseConvTensor, y: spconv.SparseConvTensor
              ) -> list[torch.Tensor]:
     g_feat = x.features * y.features
-    g_feat = g_feat.sum(dim=1, keepdim=True)
-    g = spconv.SparseConvTensor(g_feat, x.indices, x.spatial_shape,
-                                x.batch_size)
-    g = g.dense().to('cpu')
     r_feat = x.features * (1 - y.features)
-    r_feat = r_feat.sum(dim=1, keepdim=True)
-    r = spconv.SparseConvTensor(r_feat, x.indices, x.spatial_shape,
-                                x.batch_size)
-    r = r.dense().to('cpu')
-    b = torch.zeros_like(r)
-    imgs = (torch.cat([r, g, b], dim=1) * 255).to(torch.uint8)
+
+    g_sum = g_feat.sum(dim=1, keepdim=True)
+    r_sum = r_feat.sum(dim=1, keepdim=True)
+
+    imgs = make_imgs(g_sum, r_sum, x.indices, x.spatial_shape, x.batch_size)
+
     res = []
-    for img in imgs:
+    for i, img in enumerate(imgs):
         nonzero = torch.nonzero(img)
         x1 = nonzero[:, 1].min()
         y1 = nonzero[:, 2].min()
         x2 = nonzero[:, 1].max()
         y2 = nonzero[:, 2].max()
-        res.append(img[:, x1:x2, y1:y2])
+        img = img[:, x1:x2, y1:y2]
+        # print(img.shape)
+        # label_imgs = [img]
+        # for j in range(g_feat.size(dim=1)):
+        #     g_label = g_feat[:, j:j+1]
+        #     r_label = r_feat[:, j:j+1]
+        #     img_label = make_imgs(g_label, r_label, x.indices, x.spatial_shape,
+        #                           x.batch_size)
+        #     img_label = img_label[i, :, x1:x2, y1:y2]
+        #     print(img_label.shape)
+        #     label_imgs.append(img_label)
+        # img = torch.cat(label_imgs, dim=1)
+        res.append(img)
     return res
+
+
+@torch.no_grad()
+def write_x(x):
+    x = to_torch_sparse(x)
+    imgs = []
+    for img in x:
+        xs, ys = img.coalesce().indices()
+        x1, x2 = xs.min(), xs.max()
+        y1, y2 = ys.min(), ys.max()
+        img = img.to('cpu').to_dense()
+        img = img[x1:x2, y1:y2]
+        img = img.permute(2, 0, 1)
+        img = torch.cat(
+            [torch.cat([img[i*j] for j in range(7)], dim=0) for i in range(3)],
+            dim=1)
+        h, w = img.shape
+        img = img.expand(3, h, w) * 255
+        imgs.append(img)
+    return imgs
 
 
 class SparseCoco(data.Dataset):
@@ -115,10 +156,10 @@ class SparseCoco(data.Dataset):
         width, height = info['width'], info['height']
         path = info['file_name']
         image = read_image(os.path.join(self.root, path), ImageReadMode.GRAY)
-        image = channel_last(
-            ToDtype(torch.float32, scale=True)(
-                invert(image)))
-        image_sparse = image.to_sparse(image.ndim - 1) / 255.
+        image = invert(image)
+        image = channel_last(image)
+        image = ToDtype(torch.float32, scale=True)(image)
+        image_sparse = image.to_sparse(image.ndim - 1)
 
         masks = []
         for annots in self.index[index]:
@@ -129,7 +170,8 @@ class SparseCoco(data.Dataset):
                                                  height, width)
                 cat_mask |= mask
             cat_mask = channel_last(cat_mask)
-            masks.append(cat_mask.to_sparse(cat_mask.ndim - 1))
+            cat_mask = cat_mask.to_sparse(cat_mask.ndim - 1)
+            masks.append(cat_mask)
         target_sparse = torch.cat(masks, -1).to(torch.float32)
 
         if self.transforms is not None:

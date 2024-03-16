@@ -19,10 +19,14 @@ class TrainSparse:
     batch_size: int
     lr: float
     epochs: int
+    weights: Path | None
+    stride: int
+    dilation: int
 
     def __post_init__(self):
         self.output_dir = Path(self.output_dir)
         self.dataset = Path(self.dataset)
+
 
 @dataclass
 class Params:

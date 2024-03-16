@@ -7,10 +7,22 @@ stages:
     - music_detection/data/sparse_dataset.py
     - music_detection/model/sparse_model.py
     - music_detection/params.py
+    - ${train_sparse.dataset}_weights.json
     params:
     - train_sparse
     outs:
     - ${train_sparse.output_dir}
+  compute_weights:
+    cmd: python music_detection/utils/compute_weights.py
+    deps:
+    - data/coco_music_keypoints
+    - music_detection/utils/compute_weights.py
+    - music_detection/data/sparse_dataset.py
+    - music_detection/params.py
+    params:
+    - train_sparse.dataset
+    outs:
+    - ${train_sparse.dataset}_weights.json
 metrics:
 - data/train_sparse/metrics.json
 plots:

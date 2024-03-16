@@ -14,25 +14,27 @@ def share_indices(x: spconv.SparseConvTensor, y: spconv.SparseConvTensor
     return x, y
 
 
-def loss_fn(x, y):
+def loss_fn(x, y, weights):
     x, y = share_indices(x, y)
     return nn.functional.binary_cross_entropy_with_logits(
-        x.features, y.features)
+        x.features, y.features, pos_weight=weights)
 
 
 class SparseFCN(nn.Module):
 
-    def __init__(self, input_features: int, num_classes: int):
+    def __init__(self, input_features: int, num_classes: int,
+                 stride: int, dilation: int):
         super().__init__()
         self.num_classes = num_classes
         algo = None
         self.net = spconv.SparseSequential(
             spconv.SparseConv2d(
-                input_features, 8, 3, stride=2, dilation=2, indice_key="cp1",
-                algo=algo),
+                input_features, 8, 3, stride=stride, dilation=dilation,
+                indice_key="cp1", algo=algo),
             nn.ReLU(),
             spconv.SparseConv2d(
-                8, 16, 3, stride=2, dilation=2, indice_key="cp2", algo=algo),
+                8, 16, 3, stride=dilation, dilation=stride, indice_key="cp2",
+                algo=algo),
             nn.ReLU(),
             spconv.SparseInverseConv2d(
                 16, 8, 3, indice_key="cp2", algo=algo),
