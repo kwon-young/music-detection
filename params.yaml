@@ -11,7 +11,7 @@ train_sparse:
   dataset: data/coco_music_keypoints
   batch_size: 9
   lr: 0.01
-  epochs: 10
+  epochs: 100
   weights: true
   stride: 1
   dilation: 1
