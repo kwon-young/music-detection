@@ -9,9 +9,13 @@ train_sparse:
   output_dir: data/train_sparse
   seed: 0
   dataset: data/coco_music_keypoints
-  batch_size: 9
+  batch_size: 1
   lr: 0.01
-  epochs: 10
+  epochs: 100
   weights: true
-  stride: 1
-  dilation: 1
+  stride: 4
+  dilation: 4
+  label_whitelist:
+  - gClef
+  - fClef
+  image_whitelist: null

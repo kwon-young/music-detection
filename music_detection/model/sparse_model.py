@@ -16,8 +16,29 @@ def share_indices(x: spconv.SparseConvTensor, y: spconv.SparseConvTensor
 
 def loss_fn(x, y, weights):
     x, y = share_indices(x, y)
+    pos_weight = weights * (y.features.sum(dim=0) > 0)
     return nn.functional.binary_cross_entropy_with_logits(
-        x.features, y.features, pos_weight=weights)
+        x.features, y.features, pos_weight=pos_weight)
+
+
+def make_block(name, input_size, output_size, stride, dilation, algo=None):
+    modules = [
+        spconv.SparseConv2d(
+            input_size, 8, 3, stride=stride, dilation=dilation,
+            indice_key=f"{name}1", algo=algo),
+        nn.ReLU(),
+        spconv.SparseConv2d(
+            8, 16, 3, stride=stride, dilation=dilation, indice_key=f"{name}2",
+            algo=algo),
+        nn.ReLU(),
+        spconv.SparseInverseConv2d(
+            16, 8, 3, indice_key=f"{name}2", algo=algo),
+        nn.ReLU(),
+        spconv.SparseInverseConv2d(
+            8, output_size, 3, indice_key=f"{name}1", algo=algo),
+        nn.ReLU(),
+    ]
+    return spconv.SparseSequential(*modules)
 
 
 class SparseFCN(nn.Module):
@@ -26,22 +47,30 @@ class SparseFCN(nn.Module):
                  stride: int, dilation: int):
         super().__init__()
         self.num_classes = num_classes
-        algo = None
-        self.net = spconv.SparseSequential(
-            spconv.SparseConv2d(
-                input_features, 8, 3, stride=stride, dilation=dilation,
-                indice_key="cp1", algo=algo),
-            nn.ReLU(),
-            spconv.SparseConv2d(
-                8, 16, 3, stride=dilation, dilation=stride, indice_key="cp2",
-                algo=algo),
-            nn.ReLU(),
-            spconv.SparseInverseConv2d(
-                16, 8, 3, indice_key="cp2", algo=algo),
-            nn.ReLU(),
-            spconv.SparseInverseConv2d(
-                8, num_classes, 3, indice_key="cp1", algo=algo),
-        )
+        self.blocks = [
+            make_block("b1", input_features, num_classes, 4, 4),
+            make_block("b2", num_classes + input_features, num_classes, 3, 3),
+            make_block("b3", num_classes + input_features, num_classes, 2, 2),
+            make_block("b4", num_classes + input_features, num_classes, 1, 1),
+        ]
+        for i, block in enumerate(self.blocks):
+            setattr(self, f"b{i}", block)
+        self.last = spconv.SparseConv2d(
+            num_classes * len(self.blocks), num_classes, 1)
 
-    def forward(self, x):
-        return self.net(x)
+    def forward(self, input: spconv.SparseConvTensor):
+        outs = None
+        x = None
+        for block in self.blocks:
+            if x is None:
+                x = input
+            else:
+                x = x.replace_feature(
+                    torch.cat([x.features, input.features], dim=1))
+            x = block(x)
+            if outs is None:
+                outs = x
+            else:
+                outs = outs.replace_feature(
+                    torch.cat([outs.features, x.features], dim=1))
+        return self.last(outs)

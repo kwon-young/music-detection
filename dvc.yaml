@@ -21,6 +21,8 @@ stages:
     - music_detection/params.py
     params:
     - train_sparse.dataset
+    - train_sparse.label_whitelist
+    - train_sparse.image_whitelist
     outs:
     - ${train_sparse.dataset}_weights.json
 metrics:

@@ -2,6 +2,7 @@ import os
 from typing import Callable
 import json
 from pathlib import Path
+from collections import defaultdict
 
 import torch
 import torch.utils.data as data
@@ -101,7 +102,8 @@ def write_xy(x: spconv.SparseConvTensor, y: spconv.SparseConvTensor
 
 
 @torch.no_grad()
-def write_x(x):
+def write_x(x: spconv.SparseConvTensor):
+    x.replace_feature((torch.sigmoid(x.features) * 255).to(torch.uint8))
     x = to_torch_sparse(x)
     imgs = []
     for img in x:
@@ -111,11 +113,9 @@ def write_x(x):
         img = img.to('cpu').to_dense()
         img = img[x1:x2, y1:y2]
         img = img.permute(2, 0, 1)
-        img = torch.cat(
-            [torch.cat([img[i*j] for j in range(7)], dim=0) for i in range(3)],
-            dim=1)
+        img = torch.cat([i for i in img], dim=0)
         h, w = img.shape
-        img = img.expand(3, h, w) * 255
+        img = img.expand(3, h, w)
         imgs.append(img)
     return imgs
 
@@ -124,35 +124,54 @@ class SparseCoco(data.Dataset):
 
     def __init__(self, root: Path, annFile: Path,
                  transforms: Callable | None = None,
-                 categories: dict | None = None):
+                 categories: dict | None = None,
+                 label_whitelist: list[str] | None = None,
+                 image_whitelist: list[int] | None = None):
         super().__init__()
         self.root = root
         self.transforms = transforms
         with open(annFile, 'r') as f:
             self.coco = json.load(f)
-        image_index = {image['id']: i
-                       for i, image in enumerate(self.coco['images'])}
-        self.cat = {
-            i: cat['name'] for i, cat in enumerate(self.coco['categories'])}
-        cat_index = {
-            cat['id']: i for i, cat in enumerate(self.coco['categories'])}
-        self.num_classes = len(self.coco['categories'])
-        self.index: list[list[list[int]]] = [
-            [[] for _ in range(self.num_classes)]
-            for _ in range(len(image_index))]
-        for i, annot in enumerate(self.coco['annotations']):
-            image_i = image_index[annot['image_id']]
-            cat_i = cat_index[annot['category_id']]
-            self.index[image_i][cat_i].append(i)
+
+        self.images = []
+        image_ids = {}
+        cpt = 0
+        for i, image in enumerate(self.coco['images']):
+            if image_whitelist is None or image['id'] in image_whitelist:
+                self.images.append(image)
+                image_ids[image['id']] = cpt
+                cpt += 1
+        self.categories = []
+        category_ids = {}
+        cpt = 0
+        for i, category in enumerate(self.coco['categories']):
+            if label_whitelist is None or category['name'] in label_whitelist:
+                self.categories.append(category)
+                category_ids[category['id']] = cpt
+                cpt += 1
+
+        self.annotations: list[list[list[dict]]] = [
+            [[] for _ in self.categories] for _ in self.images]
+        for i, annotation in enumerate(self.coco['annotations']):
+            image_id = annotation['image_id']
+            category_id = annotation['category_id']
+            if image_id in image_ids and category_id in category_ids:
+                image_index = image_ids[image_id]
+                category_index = category_ids[category_id]
+                self.annotations[image_index][category_index].append(
+                    annotation)
+
+        self.label_whitelist = label_whitelist
+        self.num_classes = len(self.categories)
         self.cache: dict = {}
 
     def __len__(self):
-        return len(self.index)
+        return len(self.images)
 
     def __getitem__(self, index):
         if index in self.cache:
             return self.cache[index]
-        info = self.coco['images'][index]
+        info = self.images[index]
         width, height = info['width'], info['height']
         path = info['file_name']
         image = read_image(os.path.join(self.root, path), ImageReadMode.GRAY)
@@ -162,10 +181,9 @@ class SparseCoco(data.Dataset):
         image_sparse = image.to_sparse(image.ndim - 1)
 
         masks = []
-        for annots in self.index[index]:
+        for annots in self.annotations[index]:
             cat_mask = torch.zeros(1, height, width, dtype=torch.uint8)
-            for i in annots:
-                annot = self.coco['annotations'][i]
+            for annot in annots:
                 mask = convert_coco_poly_to_mask([annot['segmentation']],
                                                  height, width)
                 cat_mask |= mask

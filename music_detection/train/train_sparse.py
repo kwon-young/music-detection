@@ -29,6 +29,8 @@ def make_args():
                         help="Number of parallel workers for dataloaders")
     parser.add_argument('--resume', default=None, type=Path,
                         help="Resume from this checkpoint")
+    parser.add_argument('--evaluate', default=False, action='store_true',
+                        help="only evaluate")
     args = parser.parse_args()
     return args
 
@@ -59,7 +61,7 @@ def evaluate(epoch: int, model: SparseFCN, name: str,
     target_ones = 0.
     output_ones = 0.
     size = 0
-    for i, (images, targets) in enumerate(tqdm(loader, desc=name), start=1):
+    for i, (images, targets) in enumerate(loader, start=1):
         outputs = model(images)
         outputs, targets = share_indices(outputs, targets)
         imgs = write_x(outputs)
@@ -123,10 +125,13 @@ def main(args):
 
     train_dataset = SparseCoco(
         train_params.dataset / 'train2017',
-        train_params.dataset / 'annotations/music_keypoints_train2017.json')
+        train_params.dataset / 'annotations/music_keypoints_train2017.json',
+        label_whitelist=train_params.label_whitelist,
+        image_whitelist=train_params.image_whitelist)
     val_dataset = SparseCoco(
         train_params.dataset / 'val2017',
-        train_params.dataset / 'annotations/music_keypoints_val2017.json')
+        train_params.dataset / 'annotations/music_keypoints_val2017.json',
+        label_whitelist=train_params.label_whitelist)
 
     sparse_collate_ = partial(sparse_collate, device=device)
     train_loader = torch.utils.data.DataLoader(
@@ -152,7 +157,7 @@ def main(args):
         print("using weights", weights_name)
         with open(weights_name) as f:
             weights = json.load(f)
-        weights = torch.tensor([weights[train_dataset.cat[i]]
+        weights = torch.tensor([weights[train_dataset.categories[i]['name']]
                                 for i in range(train_dataset.num_classes)],
                                device=device)
     else:
@@ -168,11 +173,18 @@ def main(args):
                            purge_step=start_epoch)
     live = Live(dir=train_params.output_dir, resume=bool(args.resume),
                 report='md')
+
+    if args.evaluate:
+        train_loss = evaluate(start_epoch, model, "train_infer", weights,
+                              train_inference_loader, device, writer, live)
+        val_loss = evaluate(start_epoch, model, "val", weights, val_loader,
+                            device, writer, live)
+
     epoch_tqdm = tqdm(range(start_epoch, train_params.epochs), "epoch",
                       total=train_params.epochs, initial=start_epoch)
     for epoch in epoch_tqdm:
         model.train()
-        for images, targets in tqdm(train_loader, 'train'):
+        for images, targets in train_loader:
             model.zero_grad()
             outputs = model(images)
             loss = loss_fn(outputs, targets, weights)

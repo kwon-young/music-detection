@@ -22,6 +22,8 @@ class TrainSparse:
     weights: Path | None
     stride: int
     dilation: int
+    label_whitelist: list[str] | None = None
+    image_whitelist: list[int] | None = None
 
     def __post_init__(self):
         self.output_dir = Path(self.output_dir)
