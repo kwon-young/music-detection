@@ -52,8 +52,8 @@ stages:
       size: 786
     - path: music_detection/train/train_sparse.py
       hash: md5
-      md5: 3710e73434611bc4370a1769e3ae9ade
-      size: 8707
+      md5: d9819aac5b0fbc8a073d920268a37b88
+      size: 8950
     params:
       params.yaml:
         train_sparse:
@@ -73,8 +73,8 @@ stages:
     outs:
     - path: data/train_sparse
       hash: md5
-      md5: 076035f512826093c3622cc3335f8f56.dir
-      size: 159162553
+      md5: 3541b5053c682ee61bf3bb8c22617c9e.dir
+      size: 158422111
       nfiles: 82
   compute_weights:
     cmd: python music_detection/utils/compute_weights.py

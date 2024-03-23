@@ -186,6 +186,9 @@ def main(args):
     epoch_tqdm = tqdm(range(start_epoch, train_params.epochs), "epoch",
                       total=train_params.epochs, initial=start_epoch)
     for epoch in epoch_tqdm:
+        writer.add_scalar('lr', optimizer.state_dict()['param_groups'][0]['lr'],
+                          global_step=epoch)
+        live.log_metric('train/lr', optimizer.state_dict()['param_groups'][0]['lr'])
         model.train()
         for images, targets in train_loader:
             model.zero_grad()

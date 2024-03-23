@@ -18,6 +18,7 @@ class TrainSparse:
     dataset: Path
     batch_size: int
     lr: float
+    patience: int
     epochs: int
     weights: Path | None
     stride: int

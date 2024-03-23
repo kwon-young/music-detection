@@ -11,6 +11,7 @@ train_sparse:
   dataset: data/coco_music_keypoints
   batch_size: 1
   lr: 0.01
+  patience: 200
   epochs: 1000
   weights: true
   stride: 4
