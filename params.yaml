@@ -11,11 +11,11 @@ train_sparse:
   dataset: data/coco_music_keypoints
   batch_size: 1
   lr: 0.01
-  epochs: 100
+  epochs: 1000
   weights: true
   stride: 4
   dilation: 4
   label_whitelist:
   - gClef
   - fClef
-  image_whitelist: null
+  image_whitelist:
