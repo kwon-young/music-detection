@@ -52,8 +52,8 @@ stages:
       size: 786
     - path: music_detection/train/train_sparse.py
       hash: md5
-      md5: 46a8289641bbfb29c77e636354d1b3f4
-      size: 8760
+      md5: 3710e73434611bc4370a1769e3ae9ade
+      size: 8707
     params:
       params.yaml:
         train_sparse:
@@ -62,7 +62,7 @@ stages:
           dataset: data/coco_music_keypoints
           batch_size: 1
           lr: 0.01
-          epochs: 100
+          epochs: 1000
           weights: true
           stride: 4
           dilation: 4
@@ -73,8 +73,8 @@ stages:
     outs:
     - path: data/train_sparse
       hash: md5
-      md5: 00d3dba80be474b60691d75b9d9e246b.dir
-      size: 20820109
+      md5: 076035f512826093c3622cc3335f8f56.dir
+      size: 159162553
       nfiles: 82
   compute_weights:
     cmd: python music_detection/utils/compute_weights.py
@@ -94,8 +94,8 @@ stages:
       size: 786
     - path: music_detection/utils/compute_weights.py
       hash: md5
-      md5: ebe9862b6e8f2b8b7dd6f4d72f1617d6
-      size: 1804
+      md5: ed3ac3e4220be77b9d0f3a7dbd013335
+      size: 1783
     params:
       params.yaml:
         train_sparse.dataset: data/coco_music_keypoints

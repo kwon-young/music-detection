@@ -151,6 +151,8 @@ def main(args):
                       train_params.dilation)
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=train_params.lr)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, 'min', patience=100)
 
     if train_params.weights:
         weights_name = f"{train_params.dataset}_weights.json"
@@ -167,6 +169,7 @@ def main(args):
         checkpoint = torch.load(args.resume, map_location='cpu')
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
+        scheduler.load_state_dict(checkpoint['scheduler'])
         start_epoch = checkpoint['epoch'] + 1
 
     writer = SummaryWriter(log_dir=train_params.output_dir,
@@ -194,6 +197,7 @@ def main(args):
         checkpoint = {
             'model': model.state_dict(),
             'optimizer': optimizer.state_dict(),
+            'scheduler': scheduler.state_dict(),
             'epoch': epoch,
         }
         torch.save(checkpoint, train_params.output_dir / "checkpoint.pth")
@@ -202,6 +206,7 @@ def main(args):
                               train_inference_loader, device, writer, live)
         val_loss = evaluate(epoch, model, "val", weights, val_loader, device,
                             writer, live)
+        scheduler.step(train_loss)
         epoch_tqdm.set_postfix(train_loss=train_loss, val_loss=val_loss)
     writer.close()
     live.end()
