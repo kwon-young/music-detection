@@ -48,10 +48,10 @@ class SparseFCN(nn.Module):
         super().__init__()
         self.num_classes = num_classes
         self.blocks = [
-            make_block("b1", input_features, num_classes, 4, 4),
-            make_block("b2", num_classes + input_features, num_classes, 3, 3),
-            make_block("b3", num_classes + input_features, num_classes, 2, 2),
-            make_block("b4", num_classes + input_features, num_classes, 1, 1),
+            (True, make_block("b1", input_features, num_classes, 4, 4)),
+            (True, make_block("b2", num_classes + input_features, num_classes, 3, 3)),
+            (False, make_block("b3", num_classes, num_classes, 2, 2)),
+            (False, make_block("b4", num_classes, num_classes, 1, 1)),
         ]
         for i, block in enumerate(self.blocks):
             setattr(self, f"b{i}", block)
@@ -61,10 +61,10 @@ class SparseFCN(nn.Module):
     def forward(self, input: spconv.SparseConvTensor):
         outs = None
         x = None
-        for block in self.blocks:
+        for add_input, block in self.blocks:
             if x is None:
                 x = input
-            else:
+            elif add_input:
                 x = x.replace_feature(
                     torch.cat([x.features, input.features], dim=1))
             x = block(x)
