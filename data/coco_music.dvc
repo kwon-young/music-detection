@@ -1,0 +1,6 @@
+outs:
+- md5: eb6cf3c5dc3795f8aa760e7469df37c8.dir
+  size: 10341701
+  nfiles: 5
+  hash: md5
+  path: coco_music
