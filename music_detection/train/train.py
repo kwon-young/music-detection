@@ -30,11 +30,10 @@ import torchvision
 import torchvision.models.detection
 import torchvision.models.detection.mask_rcnn
 import utils
-from coco_utils import get_coco, get_coco_kp, get_coco_music
+from coco_utils import get_coco
 from engine import evaluate, train_one_epoch
 from group_by_aspect_ratio import create_aspect_ratio_groups, GroupedBatchSampler
 from torchvision.transforms import InterpolationMode
-from torchvision.utils import draw_bounding_boxes
 from transforms import SimpleCopyPaste
 import numpy as np
 from dvclive import Live
@@ -45,26 +44,32 @@ def copypaste_collate_fn(batch):
     return copypaste(*utils.collate_fn(batch))
 
 
-def get_dataset(name, image_set, transform, data_path):
-    paths = {"coco": (data_path, get_coco, 91, None),
-             "coco_kp": (data_path, get_coco_kp, 2, None),
-             "coco_music_kp": (data_path, get_coco_music, 21, 2),
-             }
-    p, ds_fn, num_classes, num_keypoints = paths[name]
+def get_dataset(is_train, args):
+    image_set = "train" if is_train else "val"
+    num_classes, mode = {"coco": (91, "instances"), "coco_kp": (2, "person_keypoints")}[args.dataset]
+    with_masks = "mask" in args.model
+    ds = get_coco(
+        root=args.data_path,
+        image_set=image_set,
+        transforms=get_transform(is_train, args),
+        mode=mode,
+        use_v2=args.use_v2,
+        with_masks=with_masks,
+    )
+    return ds, num_classes
 
-    ds = ds_fn(p, image_set=image_set, transforms=transform)
-    return ds, num_classes, num_keypoints
 
-
-def get_transform(train, args):
-    if train:
-        return presets.DetectionPresetTrain(data_augmentation=args.data_augmentation)
+def get_transform(is_train, args):
+    if is_train:
+        return presets.DetectionPresetTrain(
+            data_augmentation=args.data_augmentation, backend=args.backend, use_v2=args.use_v2
+        )
     elif args.weights and args.test_only:
         weights = torchvision.models.get_weight(args.weights)
         trans = weights.transforms()
         return lambda img, target: (trans(img), target)
     else:
-        return presets.DetectionPresetEval()
+        return presets.DetectionPresetEval(backend=args.backend, use_v2=args.use_v2)
 
 
 def get_args_parser(add_help=True):
@@ -73,10 +78,14 @@ def get_args_parser(add_help=True):
     parser = argparse.ArgumentParser(description="PyTorch Detection Training", add_help=add_help)
 
     parser.add_argument("--data-path", default="/datasets01/COCO/022719/", type=str, help="dataset path")
-    parser.add_argument("--dataset", default="coco", type=str, help="dataset name")
+    parser.add_argument(
+        "--dataset",
+        default="coco",
+        type=str,
+        help="dataset name. Use coco for object detection and instance segmentation and coco_kp for Keypoint detection",
+    )
     parser.add_argument("--model", default="maskrcnn_resnet50_fpn", type=str, help="model name")
-    parser.add_argument("--device", default="cuda", type=str, choices=['cuda', 'cpu'],
-                        help="device (Use cuda or cpu Default: cuda)")
+    parser.add_argument("--device", default="cuda", type=str, help="device (Use cuda or cpu Default: cuda)")
     parser.add_argument(
         "-b", "--batch-size", default=2, type=int, help="images per gpu, the total batch size is $NGPU x batch_size"
     )
@@ -168,14 +177,22 @@ def get_args_parser(add_help=True):
         help="Use CopyPaste data augmentation. Works only with data-augmentation='lsj'.",
     )
 
-    parser.add_argument("--no-evaluate", action='store_true', default=False,
-                        help="desactivate evaluation during training")
-    parser.add_argument("--seed", default=0, type=int,
-                        help="global random seed")
+    parser.add_argument("--backend", default="PIL", type=str.lower, help="PIL or tensor - case insensitive")
+    parser.add_argument("--use-v2", action="store_true", help="Use V2 transforms")
+
     return parser
 
 
 def main(args):
+    if args.backend.lower() == "tv_tensor" and not args.use_v2:
+        raise ValueError("Use --use-v2 if you want to use the tv_tensor backend.")
+    if args.dataset not in ("coco", "coco_kp"):
+        raise ValueError(f"Dataset should be coco or coco_kp, got {args.dataset}")
+    if "keypoint" in args.model and args.dataset != "coco_kp":
+        raise ValueError("Oops, if you want Keypoint detection, set --dataset coco_kp")
+    if args.dataset == "coco_kp" and args.use_v2:
+        raise ValueError("KeyPoint detection doesn't support V2 transforms yet")
+
     if args.output_dir:
         utils.mkdir(args.output_dir)
 
@@ -190,13 +207,8 @@ def main(args):
     # Data loading code
     print("Loading data")
 
-    dataset, num_classes, num_keypoints = get_dataset(args.dataset, "train", get_transform(True, args), args.data_path)
-    dataset_vis, _, _ = get_dataset(args.dataset, "train", get_transform(False, args), args.data_path)
-    dataset_test, _, _ = get_dataset(args.dataset, "val", get_transform(False, args), args.data_path)
-    if args.dataset == 'coco_music_kp':
-        kpt_oks_sigmas = np.array([1.0, 1.0]) / 10.0
-    else:
-        kpt_oks_sigmas = None
+    dataset, num_classes = get_dataset(is_train=True, args=args)
+    dataset_test, _ = get_dataset(is_train=False, args=args)
 
     print("Creating data loaders")
     if args.distributed:
@@ -204,14 +216,13 @@ def main(args):
         test_sampler = torch.utils.data.distributed.DistributedSampler(dataset_test, shuffle=False)
     else:
         train_sampler = torch.utils.data.RandomSampler(dataset)
-        vis_sampler = torch.utils.data.SequentialSampler(dataset_vis)
         test_sampler = torch.utils.data.SequentialSampler(dataset_test)
 
     if args.aspect_ratio_group_factor >= 0:
         group_ids = create_aspect_ratio_groups(dataset, k=args.aspect_ratio_group_factor)
         train_batch_sampler = GroupedBatchSampler(train_sampler, group_ids, args.batch_size)
     else:
-        train_batch_sampler = torch.utils.data.BatchSampler(train_sampler, args.batch_size, drop_last=False)
+        train_batch_sampler = torch.utils.data.BatchSampler(train_sampler, args.batch_size, drop_last=True)
 
     train_collate_fn = utils.collate_fn
     if args.use_copypaste:
@@ -227,9 +238,6 @@ def main(args):
     data_loader_test = torch.utils.data.DataLoader(
         dataset_test, batch_size=1, sampler=test_sampler, num_workers=args.workers, collate_fn=utils.collate_fn
     )
-    data_loader_vis = torch.utils.data.DataLoader(
-        dataset_vis, batch_size=1, sampler=vis_sampler, num_workers=args.workers, collate_fn=utils.collate_fn
-    )
 
     print("Creating model")
     kwargs = {"trainable_backbone_layers": args.trainable_backbone_layers}
@@ -239,11 +247,7 @@ def main(args):
         if args.rpn_score_thresh is not None:
             kwargs["rpn_score_thresh"] = args.rpn_score_thresh
     model = torchvision.models.get_model(
-        args.model, weights=args.weights,
-        weights_backbone=args.weights_backbone,
-        num_classes=num_classes,
-        num_keypoints=num_keypoints,
-        **kwargs
+        args.model, weights=args.weights, weights_backbone=args.weights_backbone, num_classes=num_classes, **kwargs
     )
     model.to(device)
     if args.distributed and args.sync_bn:
@@ -288,7 +292,7 @@ def main(args):
         )
 
     if args.resume:
-        checkpoint = torch.load(args.resume, map_location="cpu")
+        checkpoint = torch.load(args.resume, map_location="cpu", weights_only=True)
         model_without_ddp.load_state_dict(checkpoint["model"])
         optimizer.load_state_dict(checkpoint["optimizer"])
         lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
@@ -298,10 +302,7 @@ def main(args):
 
     if args.test_only:
         torch.backends.cudnn.deterministic = True
-        evaluate(model, data_loader, device=device,
-                 kpt_oks_sigmas=kpt_oks_sigmas)
-        evaluate(model, data_loader_test, device=device,
-                 kpt_oks_sigmas=kpt_oks_sigmas)
+        evaluate(model, data_loader_test, device=device)
         return
 
     writer = SummaryWriter(log_dir=args.output_dir, purge_step=args.start_epoch)
@@ -337,23 +338,7 @@ def main(args):
             utils.save_on_master(checkpoint, os.path.join(args.output_dir, "checkpoint.pth"))
 
         # evaluate after every epoch
-        if not args.no_evaluate:
-            evaluate(model, data_loader, device=device,
-                     kpt_oks_sigmas=kpt_oks_sigmas)
-            evaluate(model, data_loader_test, device=device,
-                     kpt_oks_sigmas=kpt_oks_sigmas)
-        model.eval()
-        for images, targets in data_loader_vis:
-            images = list(image.to(device) for image in images)
-            outputs = model(images)
-            for img, target, output in zip(images, targets, outputs):
-                vis_img = draw_bounding_boxes(
-                    (img.to('cpu') * 255).to(torch.uint8),
-                    output['boxes'].to('cpu'),
-                    [str(int(label)) for label in output['labels']],
-                    colors='red')
-                writer.add_image(f"train_{int(target['image_id'])}", vis_img,
-                                 global_step=epoch)
+        evaluate(model, data_loader_test, device=device)
         live.next_step()
     writer.close()
     live.end()

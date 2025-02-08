@@ -11,7 +11,7 @@ from pycocotools.cocoeval import COCOeval
 
 
 class CocoEvaluator:
-    def __init__(self, coco_gt, iou_types, kpt_oks_sigmas=None):
+    def __init__(self, coco_gt, iou_types):
         if not isinstance(iou_types, (list, tuple)):
             raise TypeError(f"This constructor expects iou_types of type list or tuple, instead  got {type(iou_types)}")
         coco_gt = copy.deepcopy(coco_gt)
@@ -21,8 +21,6 @@ class CocoEvaluator:
         self.coco_eval = {}
         for iou_type in iou_types:
             self.coco_eval[iou_type] = COCOeval(coco_gt, iouType=iou_type)
-            if kpt_oks_sigmas is not None and iou_type == 'keypoints':
-                self.coco_eval[iou_type].params.kpt_oks_sigmas = kpt_oks_sigmas
 
         self.img_ids = []
         self.eval_imgs = {k: [] for k in iou_types}
