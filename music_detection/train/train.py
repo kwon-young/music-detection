@@ -349,7 +349,7 @@ def main(args):
 
 if __name__ == "__main__":
     args = get_args_parser().parse_args()
-    torch.manual_seed(args.seed)
-    random.seed(args.seed)
-    np.random.seed(args.seed)
+    torch.manual_seed(0)
+    random.seed(0)
+    np.random.seed(0)
     main(args)
