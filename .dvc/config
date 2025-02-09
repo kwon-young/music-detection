@@ -4,3 +4,7 @@
     url = s3://music-detection-dvc
     endpointurl = https://s3.eu-central-003.backblazeb2.com
     profile = blackblaze
+['remote "idrive"']
+    url = s3://music-detection-dvc
+    endpointurl = https://t6d9.par02.idrivee2-98.com
+    profile = idrive

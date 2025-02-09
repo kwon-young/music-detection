@@ -86,3 +86,12 @@ torchrun --nproc_per_node=8 train.py\
     --dataset coco_kp --model keypointrcnn_resnet50_fpn --epochs 46\
     --lr-steps 36 43 --aspect-ratio-group-factor 3 --weights-backbone ResNet50_Weights.IMAGENET1K_V1
 ```
+
+### DVC Remote
+
+For the Blackblaze and idrive s3 remote, you need to set these env var first:
+
+```
+export AWS_REQUEST_CHECKSUM_CALCULATION=when_required
+export AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
+```
